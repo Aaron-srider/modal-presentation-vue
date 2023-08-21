@@ -23,13 +23,14 @@ export default class ModalPresentationView extends Vue {
     swipePercentage = 0.1;
     uuid!: string;
 
+    viewDebug = false;
+
     /**
      * convenient function for closing modal style "right"
      */
     closeModal() {
-        console.log(`close modal: ${this.uuid}`);
-
         this.modal.style.right = `${-this.modalWidth}px`;
+        this.$emit('close', this);
     }
 
     getContainerId() {
@@ -40,8 +41,9 @@ export default class ModalPresentationView extends Vue {
      * convenient function for opening modal style "right"
      */
     openModal() {
-        console.log(`open modal: ${this.uuid}`);
         this.modal.style.right = `0`;
+        debugger;
+        this.$emit('open', this);
     }
 
     /**
@@ -49,15 +51,6 @@ export default class ModalPresentationView extends Vue {
      *
      */
     modalStyleRight() {
-        console.log(
-            `modal style right: ${Number(
-                this.modal.style.right.substring(
-                    0,
-                    this.modal.style.right.length - 2,
-                ),
-            )}`,
-        );
-
         return Number(
             this.modal.style.right.substring(
                 0,
@@ -91,7 +84,7 @@ export default class ModalPresentationView extends Vue {
 
     created() {
         this.uuid = uuidv4();
-        console.log(`new modal uuid: ${this.uuid}`);
+        console.debug(`new modal uuid: ${this.uuid}`);
     }
 
     mounted() {
@@ -102,7 +95,7 @@ export default class ModalPresentationView extends Vue {
         // Init width of the modal to page width
         this.modalWidth = pageWidth;
 
-        console.log(`modal width: ${this.modalWidth}`);
+        console.debug(`modal width: ${this.modalWidth}`);
 
         // we give the modal a init size
         this.modal.style.right = -this.modalWidth + 'px'; // let it hide into the right side of the screen
@@ -116,13 +109,16 @@ export default class ModalPresentationView extends Vue {
         // region: convenient function for manipulating modal
         // endregion
         const swipeAreaWidth = window.innerWidth * this.swipePercentage;
-        console.log('swipe area: ' + swipeAreaWidth);
+        console.debug('swipe area: ' + swipeAreaWidth);
 
         // this is the width of the area where user swipes over the screen, direction is from left to right
         let userSwipePathWidth = 0;
 
         // this is the start point of the swipe action
         let swipeStartPoint = 0;
+
+        // indicate if there is a swipe action
+        let isThereASwipe = false;
 
         // this is the time span limit of the swipe action, if the span is less than this value, we close the modal no matter where the modal is
         let closeModalSwipeSpanLimitation = 500;
@@ -148,54 +144,63 @@ export default class ModalPresentationView extends Vue {
 
                 // record the swipe start point
                 swipeStartPoint = touchClientX;
-                console.log('touch start');
+
+                isThereASwipe = true;
+
+                console.debug('touch start');
             }
         });
 
         this.modal.addEventListener('touchmove', (e) => {
             // this is very important, if we don't stop propagation, the touch event will be passed to the element below when there are nested modal
             e.stopPropagation();
-            const touch = e.changedTouches[0];
+            if (isThereASwipe) {
+                const touch = e.changedTouches[0];
 
-            // this is where the user's finger is, in this case, represents where the user's finger is moving to
-            const touchClientX = touch.clientX;
+                // this is where the user's finger is, in this case, represents where the user's finger is moving to
+                const touchClientX = touch.clientX;
 
-            userSwipePathWidth = touchClientX - swipeStartPoint;
+                userSwipePathWidth = touchClientX - swipeStartPoint;
 
-            // prevent user to swipe the panel into the left side of the screen
-            if (userSwipePathWidth >= 0) {
-                console.log('touch move');
-                console.log('swipe width: ' + userSwipePathWidth);
+                // prevent user to swipe the panel into the left side of the screen
+                if (userSwipePathWidth >= 0) {
+                    console.debug('touch move');
+                    console.debug('swipe width: ' + userSwipePathWidth);
 
-                // how long should modal move from the beginning is the same as how long user's finger moves. For example if user swipe 20px, modal should move 20px from the beginning
-                let newModalRight = 0 - userSwipePathWidth;
-                console.log('new modal right: ' + newModalRight);
-                this.setModalStyleRight(newModalRight);
+                    // how long should modal move from the beginning is the same as how long user's finger moves. For example if user swipe 20px, modal should move 20px from the beginning
+                    let newModalRight = 0 - userSwipePathWidth;
+                    console.debug('new modal right: ' + newModalRight);
+                    this.setModalStyleRight(newModalRight);
+                }
             }
         });
 
         this.modal.addEventListener('touchend', (e) => {
             // this is very important, if we don't stop propagation, the touch event will be passed to the element below when there are nested modal
             e.stopPropagation();
-            // restore the transition of modal
-            this.modal.classList.add('transition');
-            swipeEndTime = new Date().getTime();
 
-            // if the span user swipes is less than a certain time span limit, close the modal no matter where the modal is
-            if (
-                swipeEndTime - swipeStartTime <=
-                    closeModalSwipeSpanLimitation &&
-                userSwipePathWidth > 0
-            ) {
-                this.closeModal();
-                return;
-            }
+            if (isThereASwipe) {
+                // restore the transition of modal
+                this.modal.classList.add('transition');
+                swipeEndTime = new Date().getTime();
 
-            // ok, may be user want to play with the modal, let him/her/it/helicopter do it, we handle the action of closing or restoring the modal in the next step
-            if (this.shouldModalClose()) {
-                this.closeModal();
-            } else {
-                this.openModal();
+                // if the span user swipes is less than a certain time span limit, close the modal no matter where the modal is
+                if (
+                    swipeEndTime - swipeStartTime <=
+                        closeModalSwipeSpanLimitation &&
+                    userSwipePathWidth > 0
+                ) {
+                    this.closeModal();
+                    return;
+                }
+
+                // ok, may be user want to play with the modal, let him/her/it/helicopter do it, we handle the action of closing or restoring the modal in the next step
+                if (this.shouldModalClose()) {
+                    this.closeModal();
+                } else {
+                    this.openModal();
+                }
+                isThereASwipe = false;
             }
         });
     }
